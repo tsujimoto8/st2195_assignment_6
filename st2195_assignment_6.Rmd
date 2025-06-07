@@ -1,0 +1,117 @@
+---
+title: "st2195_assignment_6"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+``` 
+
+Initial set up:
+
+```{r}
+
+library(dplyr)
+library(readr)
+library(stringr)
+library(tm)
+library(stopwords)
+
+setwd("C:/Users/tsuji/Dropbox/study/UoL/ST2195 Programming for Data Science/lecture6/st2195_assignment_6")
+
+```
+
+1. Load and merge the datasets keeping all information available for the dates in which there is a measurement in “fx.csv”.
+
+```{r}
+fx <- read.csv("fx.csv", header = TRUE)
+speeches <- read.csv("speeches.csv", header = TRUE, sep = "|")
+merged <- left_join(fx, speeches, by = "date")
+
+```
+
+2. Remove entries with obvious outliers or mistakes, if any.
+
+```{r}
+print(summary(merged['value'])) # No outlier was found.
+```
+
+3. Handle missing observations for the exchange rate, if any. This should be done replacing any missing exchange rate with the latest information available. Whenever this cannot be done, the relevant entry should be removed entirely from the dataset.
+
+```{r}
+print(sum(is.na(merged['value']))) # No NA was found.
+```
+
+4. Calculate the exchange rate return. Extend the original dataset with the following variables: “good_news” (equal to 1 when the exchange rate return is larger than 0.5 percent, 0 otherwise) and “bad_news” (equal to 1 when the exchange rate return is lower than -0.5 percent, 0 otherwise).
+
+```{r}
+merged$value <- as.numeric(merged$value)
+merged <- merged %>% mutate(return = (value - lag(value)) / lag(value))
+merged <- merged %>%
+  mutate(
+    good_news = ifelse(return > 0.005, 1, 0),
+    bad_news  = ifelse(return < -0.005, 1, 0)
+  )
+```
+
+5. Remove the entries for which contents column has NA values. Generate and store in csv the following tables:
+
+a. “good_indicators” – with the 20 most common words (excluding articles, prepositions and similar connectors) associated with entries where in “good_news” is equal to 1;
+
+b. “bad_indicators” – with the 20 most common words (excluding articles, prepositions and similar connectors) associated with entries wherein “bad_news” is equal to 1;
+
+Any observation from the common words found above?
+
+```{r}
+# Subset to rows with good_news == 1
+good_news_contents <- merged %>%
+  filter(good_news == 1) %>%
+  pull(contents) %>%
+  na.omit() %>%
+  paste(collapse = " ") %>%
+  tolower()
+
+good_news_contents <- str_replace_all(good_news_contents, "[^a-z]", " ") # Clean the Text to Keep Only Letters
+good_words <- unlist(str_split(good_news_contents, "\\s+")) # Split the Cleaned Text Into Words
+good_words <- good_words[good_words != ""] # Remove Any Empty Strings
+
+langs <- c("en", "fr", "de", "es", "it", "nl", "pt")
+all_stops <- unique(unlist(lapply(langs, stopwords)))
+good_words <- good_words[!good_words %in% all_stops]
+
+good_word_counts <- sort(table(good_words), decreasing = TRUE)
+good_most_common_20 <- head(good_word_counts, 20)
+print(good_most_common_20)
+
+good_df <- data.frame(
+  word = names(good_most_common_20),
+  count = as.vector(good_most_common_20)
+)
+```
+
+
+```{r}
+# Subset to rows with bad_news == 1
+bad_news_contents <- merged %>%
+  filter(bad_news == 1) %>%
+  pull(contents) %>%
+  na.omit() %>%
+  paste(collapse = " ") %>%
+  tolower()
+
+bad_news_contents <- str_replace_all(bad_news_contents, "[^a-z]", " ")
+bad_words <- unlist(str_split(bad_news_contents, "\\s+"))
+bad_words <- bad_words[bad_words != ""]
+
+bad_words <- bad_words[!bad_words %in% all_stops]
+
+bad_word_counts <- sort(table(bad_words), decreasing = TRUE)
+bad_most_common_20 <- head(bad_word_counts, 20)
+print(bad_most_common_20)
+
+bad_df <- data.frame(
+  word = names(bad_most_common_20),
+  count = as.vector(bad_most_common_20)
+)
+```
+
